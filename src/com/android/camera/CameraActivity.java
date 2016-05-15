@@ -389,6 +389,10 @@ public class CameraActivity extends Activity
         mDeveloperMenuEnabled = true;
     }
 
+    public void disableDeveloperMenu() {
+        mDeveloperMenuEnabled = false;
+    }
+
     public static void resetFirstStartAfterScreenOn() {
         sFirstStartAfterScreenOn = false;
     }
