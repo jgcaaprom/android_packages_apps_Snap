@@ -413,10 +413,9 @@ public class VideoModule implements CameraModule,
             String action = intent.getAction();
             if (action.equals(Intent.ACTION_MEDIA_EJECT)) {
                 stopVideoRecording();
-            } else if (action.equals(Intent.ACTION_MEDIA_SCANNER_STARTED)) {
                 RotateTextToast.makeText(mActivity,
-                        mActivity.getResources().getString(R.string.wait), Toast.LENGTH_LONG)
-                        .show();
+                        mActivity.getResources().getString(R.string.video_recording_stopped),
+                                Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -677,6 +676,7 @@ public class VideoModule implements CameraModule,
                 setFlipValue();
                 mCameraDevice.setParameters(mParameters);
             }
+            mUI.tryToCloseSubList();
             mUI.setOrientation(newOrientation, true);
         }
 
@@ -952,7 +952,8 @@ public class VideoModule implements CameraModule,
 
     private boolean is4KEnabled() {
        if (mProfile.quality == CamcorderProfile.QUALITY_2160P ||
-           mProfile.quality == CamcorderProfile.QUALITY_4KDCI) {
+           mProfile.quality == CamcorderProfile.QUALITY_TIME_LAPSE_2160P ||
+           mProfile.quality == CamcorderProfile.QUALITY_4KDCI ) {
            return true;
        } else {
            return false;
@@ -1110,6 +1111,8 @@ public class VideoModule implements CameraModule,
 
     @Override
     public void installIntentFilter() {
+        if(mReceiver != null)
+            return;
         // install an intent filter to receive SD card related events.
         IntentFilter intentFilter =
                 new IntentFilter(Intent.ACTION_MEDIA_EJECT);
@@ -1137,6 +1140,7 @@ public class VideoModule implements CameraModule,
 
         initializeVideoControl();
         showVideoSnapshotUI(false);
+        installIntentFilter();
 
         if (!mPreviewing) {
             openCamera();
@@ -1729,7 +1733,6 @@ public class VideoModule implements CameraModule,
         } else {
             path = Storage.DIRECTORY + '/' + filename;
         }
-        String tmpPath = path + ".tmp";
         mCurrentVideoValues = new ContentValues(9);
         mCurrentVideoValues.put(Video.Media.TITLE, title);
         mCurrentVideoValues.put(Video.Media.DISPLAY_NAME, filename);
@@ -1745,7 +1748,7 @@ public class VideoModule implements CameraModule,
             mCurrentVideoValues.put(Video.Media.LATITUDE, loc.getLatitude());
             mCurrentVideoValues.put(Video.Media.LONGITUDE, loc.getLongitude());
         }
-        mVideoFilename = tmpPath;
+        mVideoFilename = path;
         Log.v(TAG, "New video filename: " + mVideoFilename);
     }
 
@@ -1821,6 +1824,7 @@ public class VideoModule implements CameraModule,
     public void onError(MediaRecorder mr, int what, int extra) {
         Log.e(TAG, "MediaRecorder error. what=" + what + ". extra=" + extra);
         stopVideoRecording();
+        mUI.showUIafterRecording();
         if (what == MediaRecorder.MEDIA_RECORDER_ERROR_UNKNOWN) {
             // We may have run out of space on the sdcard.
             mActivity.updateStorageSpaceAndHint();
@@ -1929,7 +1933,7 @@ public class VideoModule implements CameraModule,
         try {
             mMediaRecorder.start(); // Recording is now started
         } catch (RuntimeException e) {
-            Log.e(TAG, "Could not start media recorder. ", e);
+            Toast.makeText(mActivity,"Could not start media recorder.\n Can't start video recording.", Toast.LENGTH_LONG).show();
             releaseMediaRecorder();
             releaseAudioFocus();
             // If start fails, frameworks will not lock the camera for us.
@@ -2336,26 +2340,6 @@ public class VideoModule implements CameraModule,
             mParameters.setAntibanding(antiBanding);
         }
 
-        String seeMoreMode = mPreferences.getString(
-                CameraSettings.KEY_SEE_MORE,
-                mActivity.getString(R.string.pref_camera_see_more_default));
-        Log.v(TAG, "See More value =" + seeMoreMode);
-
-        if (isSupported(seeMoreMode,
-                CameraSettings.getSupportedSeeMoreModes(mParameters))) {
-            if (is4KEnabled() && seeMoreMode.equals(mActivity.getString(R.string.
-                    pref_camera_see_more_value_on))) {
-                mParameters.set(CameraSettings.KEY_QC_SEE_MORE_MODE,
-                        mActivity.getString(R.string.pref_camera_see_more_value_off));
-                mUI.overrideSettings(CameraSettings.KEY_SEE_MORE,
-                        mActivity.getString(R.string.pref_camera_see_more_value_off));
-                Toast.makeText(mActivity, R.string.video_quality_4k_disable_SeeMore,
-                        Toast.LENGTH_LONG).show();
-            } else {
-               mParameters.set(CameraSettings.KEY_QC_SEE_MORE_MODE, seeMoreMode);
-            }
-        }
-
         mUnsupportedHFRVideoSize = false;
         mUnsupportedHFRVideoCodec = false;
         mUnsupportedHSRVideoSize = false;
@@ -2507,6 +2491,33 @@ public class VideoModule implements CameraModule,
             }
             mParameters.set(CameraSettings.KEY_QC_VIDEO_TNR_MODE, video_tnr);
             mUI.overrideSettings(CameraSettings.KEY_QC_VIDEO_TNR_MODE, video_tnr);
+        }
+
+        String seeMoreMode = mPreferences.getString(
+                CameraSettings.KEY_SEE_MORE,
+                mActivity.getString(R.string.pref_camera_see_more_default));
+        Log.v(TAG, "See More value =" + seeMoreMode);
+
+        if (isSupported(seeMoreMode,
+                CameraSettings.getSupportedSeeMoreModes(mParameters))) {
+            /* Disable CDS */
+            if ("on".equals(seeMoreMode) && "on".equals(video_cds)) {
+                mParameters.set(CameraSettings.KEY_QC_VIDEO_CDS_MODE, "off");
+                mUI.overrideSettings(CameraSettings.KEY_QC_VIDEO_CDS_MODE, "off");
+                Toast.makeText(mActivity, R.string.disable_CDS_during_SeeMore,
+                    Toast.LENGTH_LONG).show();
+            }
+
+            /* Disable TNR */
+            if ("on".equals(seeMoreMode) && "on".equals(video_tnr)) {
+                mParameters.set(CameraSettings.KEY_QC_VIDEO_TNR_MODE, "off");
+                mUI.overrideSettings(CameraSettings.KEY_QC_VIDEO_TNR_MODE, "off");
+                Toast.makeText(mActivity, R.string.disable_TNR_during_SeeMore,
+                    Toast.LENGTH_LONG).show();
+            }
+
+            /* Set SeeMore mode */
+            mParameters.set(CameraSettings.KEY_QC_SEE_MORE_MODE, seeMoreMode);
         }
 
         // Set Video HDR.

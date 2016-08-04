@@ -135,6 +135,7 @@ public class CameraSettings {
     private static final String KEY_QC_SUPPORTED_FACE_RECOGNITION_MODES = "face-recognition-values";
     private static final String KEY_QC_SUPPORTED_DIS_MODES = "dis-values";
     private static final String KEY_QC_SUPPORTED_SEE_MORE_MODES = "see-more-values";
+    private static final String KEY_QC_SUPPORTED_STILL_MORE_MODES = "still-more-values";
     private static final String KEY_QC_SUPPORTED_CDS_MODES = "cds-mode-values";
     private static final String KEY_QC_SUPPORTED_VIDEO_CDS_MODES = "video-cds-mode-values";
     private static final String KEY_QC_SUPPORTED_TNR_MODES = "tnr-mode-values";
@@ -154,6 +155,7 @@ public class CameraSettings {
     public static final String KEY_QC_FSSR = "FSSR";
     public static final String KEY_QC_TP = "true-portrait";
     public static final String KEY_QC_MULTI_TOUCH_FOCUS = "multi-touch-focus";
+    public static final String KEY_QC_STILL_MORE = "still-more";
     public static final String KEY_QC_FACE_RECOGNITION = "face-recognition";
     public static final String KEY_QC_DIS_MODE = "dis";
     public static final String KEY_QC_CDS_MODE = "cds-mode";
@@ -541,6 +543,7 @@ public class CameraSettings {
         str += ',' + params.get(KEY_QC_SUPPORTED_MTF_MODES);
         str += ',' + mContext.getString(R.string.pref_camera_advanced_feature_default);
         str += ',' + params.get(KEY_QC_SUPPORTED_RE_FOCUS_MODES);
+        str += ',' + params.get(KEY_QC_SUPPORTED_STILL_MORE_MODES);
         return split(str);
     }
 
@@ -602,6 +605,14 @@ public class CameraSettings {
 
     public static List<String> getSupportedPreviewFormats(Parameters params) {
         String str = params.get(KEY_QC_SUPPORTED_PREVIEW_FORMATS);
+        if (str == null) {
+            return null;
+        }
+        return split(str);
+    }
+
+    public static List<String> getSupportedStillMoreModes(Parameters params) {
+        String str = params.get(KEY_QC_SUPPORTED_STILL_MORE_MODES);
         if (str == null) {
             return null;
         }
@@ -861,6 +872,7 @@ public class CameraSettings {
         ListPreference timeLapseInterval = group.findPreference(KEY_VIDEO_TIME_LAPSE_FRAME_INTERVAL);
         ListPreference pictureSize = group.findPreference(KEY_PICTURE_SIZE);
         ListPreference whiteBalance =  group.findPreference(KEY_WHITE_BALANCE);
+        ListPreference chromaFlash = group.findPreference(KEY_QC_CHROMA_FLASH);
         ListPreference sceneMode = group.findPreference(KEY_SCENE_MODE);
         ListPreference flashMode = group.findPreference(KEY_FLASH_MODE);
         ListPreference focusMode = group.findPreference(KEY_FOCUS_MODE);
@@ -907,6 +919,17 @@ public class CameraSettings {
                     whiteBalance, mParameters.getSupportedWhiteBalance());
         }
 
+        if (chromaFlash != null) {
+            List<String> supportedAdvancedFeatures =
+                    getSupportedAdvancedFeatures(mParameters);
+            if (hasChromaFlashScene(mContext) || !CameraUtil.isSupported(
+                        mContext.getString(R.string
+                            .pref_camera_advanced_feature_value_chromaflash_on),
+                        supportedAdvancedFeatures)) {
+                removePreference(group, chromaFlash.getKey());
+            }
+        }
+
         if (sceneMode != null) {
             List<String> supportedSceneModes = mParameters.getSupportedSceneModes();
             List<String> supportedAdvancedFeatures =
@@ -917,6 +940,20 @@ public class CameraSettings {
                         supportedAdvancedFeatures)) {
                 supportedSceneModes.add(mContext.getString(R.string
                             .pref_camera_advanced_feature_value_refocus_on));
+            }
+            if (CameraUtil.isSupported(
+                        mContext.getString(R.string
+                                .pref_camera_advanced_feature_value_optizoom_on),
+                        supportedAdvancedFeatures)) {
+                supportedSceneModes.add(mContext.getString(R.string
+                            .pref_camera_advanced_feature_value_optizoom_on));
+            }
+            if (hasChromaFlashScene(mContext) && CameraUtil.isSupported(
+                        mContext.getString(R.string
+                                .pref_camera_advanced_feature_value_chromaflash_on),
+                        supportedAdvancedFeatures)) {
+                supportedSceneModes.add(mContext.getString(R.string
+                            .pref_camera_advanced_feature_value_chromaflash_on));
             }
             filterUnsupportedOptions(group, sceneMode, supportedSceneModes);
         }
@@ -1373,4 +1410,15 @@ public class CameraSettings {
         return split(str);
     }
 
+    public static boolean hasChromaFlashScene(Context context) {
+        String[] sceneModes = context.getResources().getStringArray(
+                R.array.pref_camera_scenemode_entryvalues);
+        for (String mode : sceneModes) {
+            if (mode.equals(context.getResources().getString(R.string
+                            .pref_camera_advanced_feature_value_chromaflash_on))) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
